@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRON CORE | Management System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --text: #f1f5f9;
+            --glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+        body {
+            background: radial-gradient(circle at top left, #1e293b, #0f172a);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Centering utility for Login screens */
+        .auth-center {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .hidden { display: none !important; }
+
+        /* Glass Card */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; text-align: center; letter-spacing: -0.5px; }
+        p.subtitle { text-align: center; color: #94a3b8; margin-bottom: 24px; font-size: 0.9rem; }
+
+        /* Form Elements */
+        .input-group { margin-bottom: 16px; }
+        label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px; margin-left: 4px; }
+        input {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: white;
+            outline: none;
+            transition: 0.2s;
+            font-size: 1rem;
+        }
+        input:focus { border-color: var(--accent); background: rgba(255,255,255,0.1); }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background: var(--accent);
+            color: #0f172a;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.3s;
+            margin-top: 10px;
+        }
+        .btn:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 10px 20px -5px rgba(56, 189, 248, 0.4); }
+
+        /* Dashboard Layout */
+        .dashboard-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border-radius: 32px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: rgba(15, 23, 42, 0.5);
+            border-right: 1px solid var(--border);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .main-content { flex: 1; padding: 40px; overflow-y: auto; }
+
+        .nav-item {
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-bottom: 8px;
+            color: #94a3b8;
+            transition: 0.2s;
+        }
+        .nav-item:hover { background: var(--glass); color: white; }
+        .nav-item.active { background: var(--accent); color: #0f172a; font-weight: 600; }
+
+        /* Tables & Stats */
+        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+        th { text-align: left; padding: 12px; color: #94a3b8; font-weight: 400; font-size: 0.85rem; }
+        td { background: var(--glass); padding: 16px; }
+        td:first-child { border-radius: 12px 0 0 12px; }
+        td:last-child { border-radius: 0 12px 12px 0; text-align: right; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: var(--glass); padding: 24px; border-radius: 20px; border: 1px solid var(--border); }
+        .stat-card h3 { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 8px; }
+        .stat-card p { font-size: 2rem; font-weight: 700; color: var(--accent); }
+
+        .logout-btn { margin-top: auto; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); text-align: center; }
+        
+        select {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: white;
+            margin-bottom: 16px;
+            outline: none;
+        }
+
+        /* Floating Action Button for Mobile */
+        .fab {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            box-shadow: 0 10px 25px rgba(56, 189, 248, 0.4);
+            font-size: 30px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .fab:hover { transform: scale(1.1) rotate(90deg); }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .dashboard-container {
+                flex-direction: column;
+                border-radius: 0;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                padding: 20px;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            #nav-links {
+                display: flex;
+                gap: 8px;
+                overflow-x: auto;
+                padding-bottom: 10px;
+                scrollbar-width: none; /* Hide scrollbar Firefox */
+            }
+            #nav-links::-webkit-scrollbar { display: none; } /* Hide scrollbar Chrome/Safari */
+
+            .nav-item { margin-bottom: 0; white-space: nowrap; font-size: 0.85rem; }
+
+            .stats-row {
+                grid-template-columns: 1fr;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .glass-card { padding: 30px; }
+
+            .fab { display: flex; }
+        }
+    </style>
+</head>
+<body class="auth-center">
+
+    <div id="screen-gate" class="glass-card">
+        <h1>IRON CORE</h1>
+        <p class="subtitle">Secure Management Gateway</p>
+        <div class="input-group">
+            <label>Master Access Key</label>
+            <input type="password" id="sys-key" placeholder="••••••••" autofocus>
+        </div>
+        <button class="btn" onclick="checkGate()">Enter System</button>
+    </div>
+
+    <div id="screen-auth-choice" class="glass-card hidden">
+        <h1>Welcome Back</h1>
+        <p class="subtitle">Please select your portal</p>
+        <button class="btn" onclick="showAuth('admin')">Administrator Portal</button>
+        <button class="btn" onclick="showAuth('staff')" style="background: transparent; border: 1px solid var(--border); color: white; margin-top: 15px;">Staff Portal</button>
+    </div>
+
+    <div id="screen-login" class="glass-card hidden">
+        <h1 id="login-title">Login</h1>
+        <p class="subtitle">Enter your credentials</p>
+        <div class="input-group">
+            <label>Username</label>
+            <input type="text" id="user-field">
+        </div>
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" id="pass-field">
+        </div>
+        <button class="btn" onclick="handleLogin()">Sign In</button>
+        <button class="btn" onclick="showScreen('screen-auth-choice')" style="background:none; color:#94a3b8; font-size: 0.8rem;">Go Back</button>
+    </div>
+
+    <div id="screen-dashboard" class="dashboard-container hidden">
+        <div class="sidebar">
+            <h2 style="color: var(--accent); margin-bottom: 30px;">IRON CORE</h2>
+            <div id="nav-links">
+                </div>
+            <div class="nav-item logout-btn" onclick="location.reload()">Exit System</div>
+        </div>
+        <div class="main-content" id="main-view">
+        </div>
+        <button class="fab" onclick="addMemberForm()" title="Add Member">+</button>
+    </div>
+
+    <script>
+        // GLOBAL STATE & CLOUD CONFIG
+        let appData = {
+            employees: [],
+            members: [],
+            payments: []
+        };
+
+        const BIN_ID = "69d14a8aaaba882197c4e169";
+        const MASTER_KEY = "$2a$10$boob7HiU/Qq/iPITpxeE0.knWZ6rRbVaVVdBwmJlAgmAbrlr2gX1.";
+        const ACCESS_KEY = "$2a$10$VgVAfIMuJJkppxqYEA90A.vGGGWZRRwayaU6aApoiIBkH8n2BSF/q";
+
+        let authMode = ""; 
+
+        // JSONBIN OPERATIONS
+        async function loadData() {
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                    headers: { "X-Master-Key": MASTER_KEY, "X-Access-Key": ACCESS_KEY }
+                });
+                const json = await res.json();
+                return json.record;
+            } catch (err) {
+                console.error("Load failed:", err);
+                return { employees: [], members: [], payments: [] };
+            }
+        }
+
+        async function saveData() {
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Master-Key": MASTER_KEY,
+                        "X-Access-Key": ACCESS_KEY
+                    },
+                    body: JSON.stringify(appData)
+                });
+            } catch (err) {
+                console.error("Save failed:", err);
+            }
+        }
+
+        // INITIAL LOAD
+        (async () => {
+            appData = await loadData();
+        })();
+
+        // ENTER KEY GLOBAL LISTENER
+        document.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                const activeScreen = document.querySelector('.glass-card:not(.hidden)');
+                if (activeScreen) {
+                    const btn = activeScreen.querySelector('.btn');
+                    if (btn) btn.click();
+                }
+            }
+        });
+
+        function showScreen(id) {
+            document.querySelectorAll('body > div').forEach(div => div.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        // 1. GATEKEEPER
+        function checkGate() {
+            if (document.getElementById('sys-key').value === "gym@2025") {
+                showScreen('screen-auth-choice');
+            } else {
+                alert("Access Denied");
+            }
+        }
+
+        // 2. AUTH SELECTION
+        function showAuth(mode) {
+            authMode = mode;
+            document.getElementById('login-title').innerText = mode === 'admin' ? "Admin Login" : "Staff Login";
+            document.getElementById('user-field').value = "";
+            document.getElementById('pass-field').value = "";
+            showScreen('screen-login');
+        }
+
+        // 3. LOGIN LOGIC
+        function handleLogin() {
+            const u = document.getElementById('user-field').value;
+            const p = document.getElementById('pass-field').value;
+
+            if (authMode === 'admin') {
+                if (u === "admin" && p === "admin123") launchDashboard('admin');
+                else alert("Invalid Admin Login");
+            } else {
+                const emp = appData.employees.find(e => e.user === u && e.pass === p);
+                if (emp) launchDashboard('staff');
+                else alert("Invalid Staff Login");
+            }
+        }
+
+        // 4. DASHBOARD RENDERER
+        function launchDashboard(role) {
+            document.body.classList.remove('auth-center');
+            showScreen('screen-dashboard');
+            renderNav(role);
+            role === 'admin' ? viewStats() : viewMembers();
+        }
+
+        function renderNav(role) {
+            const nav = document.getElementById('nav-links');
+            nav.innerHTML = role === 'admin' ? `
+                <div class="nav-item" onclick="switchTab(this, viewStats)">Overview</div>
+                <div class="nav-item" onclick="switchTab(this, viewEmployees)">Manage Staff</div>
+                <div class="nav-item" onclick="switchTab(this, viewPayments)">Finances</div>
+            ` : `
+                <div class="nav-item" onclick="switchTab(this, viewMembers)">Members</div>
+                <div class="nav-item" onclick="switchTab(this, addMemberForm)">Add Member</div>
+                <div class="nav-item" onclick="switchTab(this, addPaymentForm)">Record Payment</div>
+            `;
+            nav.querySelector('.nav-item').classList.add('active');
+        }
+
+        function switchTab(el, func) {
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+            func();
+        }
+
+        // --- ADMIN VIEWS ---
+        function viewStats() {
+            const revenue = appData.payments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+            document.getElementById('main-view').innerHTML = `
+                <h1>System Overview</h1>
+                <div class="stats-row">
+                    <div class="stat-card"><h3>Staff</h3><p>${appData.employees.length}</p></div>
+                    <div class="stat-card"><h3>Total Members</h3><p>${appData.members.length}</p></div>
+                    <div class="stat-card"><h3>Revenue</h3><p>$${revenue.toFixed(2)}</p></div>
+                </div>
+            `;
+        }
+
+        function viewEmployees() {
+            let rows = appData.employees.map(e => `
+                <tr>
+                    <td>${e.id}</td>
+                    <td>${e.user}</td>
+                    <td>Staff</td>
+                    <td><button onclick="deleteEmp(${e.id})" style="background:none; border:none; color:#ef4444; cursor:pointer;">Delete</button></td>
+                </tr>`).join('');
+            document.getElementById('main-view').innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <h1>Staff Management</h1>
+                    <button class="btn" onclick="addEmpForm()" style="width:auto; padding: 10px 20px;">+ Add Staff</button>
+                </div>
+                <div class="table-wrapper">
+                    <table><thead><tr><th>ID</th><th>Username</th><th>Role</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+                </div>
+            `;
+        }
+
+        // --- STAFF VIEWS ---
+        function viewMembers() {
+            document.getElementById('main-view').innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <h1>Gym Members</h1>
+                    <input type="text" id="member-search" placeholder="Search by name..." oninput="filterMembers()" style="width: 100%; max-width: 250px;">
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>ID</th><th>Name</th><th>Plan</th><th>Status</th><th></th></tr>
+                        </thead>
+                        <tbody id="member-table-body">
+                            ${renderMemberRows(appData.members)}
+                        </tbody>
+                    </table>
+                </div>`;
+        }
+
+        function renderMemberRows(data) {
+            return data.map(m => `
+                <tr>
+                    <td>#${m.id}</td>
+                    <td>${m.name}</td>
+                    <td>${m.plan}</td>
+                    <td>${m.status}</td>
+                    <td><button onclick="deleteMember(${m.id})" style="background:none; border:none; color:#ef4444; cursor:pointer;">Remove</button></td>
+                </tr>`).join('');
+        }
+
+        function filterMembers() {
+            const query = document.getElementById('member-search').value.toLowerCase();
+            const filtered = appData.members.filter(m => m.name.toLowerCase().includes(query));
+            document.getElementById('member-table-body').innerHTML = renderMemberRows(filtered);
+        }
+
+        // --- FORMS ---
+        function addEmpForm() {
+            document.getElementById('main-view').innerHTML = `
+                <h1>New Staff Member</h1>
+                <div class="glass-card" style="max-width:100%; margin-top:20px;">
+                    <input type="text" id="new-u" placeholder="Username" style="margin-bottom:15px;">
+                    <input type="password" id="new-p" placeholder="Password" style="margin-bottom:15px;">
+                    <button class="btn" onclick="saveEmp()">Create Account</button>
+                </div>
+            `;
+        }
+
+        async function saveEmp() {
+            const u = document.getElementById('new-u').value;
+            const p = document.getElementById('new-p').value;
+            if(!u || !p) return alert("Required fields missing");
+            appData.employees.push({ id: Date.now(), user: u, pass: p });
+            await saveData();
+            viewEmployees();
+        }
+
+        // Shared back-end logic for members and payments would follow the same pattern...
+        function addMemberForm() {
+            // Sync navigation active state for staff view
+            document.querySelectorAll('.nav-item').forEach(i => {
+                i.classList.toggle('active', i.innerText === 'Add Member');
+            });
+
+            document.getElementById('main-view').innerHTML = `
+                <h1>Register Member</h1>
+                <div class="glass-card" style="max-width:100%; margin-top:20px;">
+                    <input type="text" id="m-n" placeholder="Full Name" style="margin-bottom:15px;">
+                    <input type="text" id="m-pl" placeholder="Plan (e.g. Pro, Basic)" style="margin-bottom:15px;">
+                    <button class="btn" onclick="saveMember()">Add to System</button>
+                </div>
+            `;
+        }
+
+        async function saveMember() {
+            const n = document.getElementById('m-n').value;
+            const p = document.getElementById('m-pl').value;
+            if(!n || !p) return alert("Fill all fields");
+            appData.members.push({ id: Date.now(), name: n, plan: p, status: 'Active' });
+            await saveData();
+            // Return to member list and sync navigation active state
+            document.querySelectorAll('.nav-item').forEach(i => {
+                i.classList.toggle('active', i.innerText === 'Members');
+            });
+            viewMembers();
+        }
+
+        function viewPayments() {
+            let rows = appData.payments.map(p => {
+                const member = appData.members.find(m => m.id == p.mId);
+                return `<tr><td>${member ? member.name : 'Unknown'}</td><td>${p.date}</td><td>$${p.amount}</td></tr>`;
+            }).join('');
+            document.getElementById('main-view').innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <h1>Finance History</h1>
+                    <button class="btn" onclick="exportPaymentsToCSV()" style="width:auto; padding: 10px 20px;">Export CSV</button>
+                </div>
+                <div class="table-wrapper">
+                    <table><thead><tr><th>Member</th><th>Date</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table>
+                </div>`;
+        }
+
+        function addPaymentForm() {
+            if (appData.members.length === 0) return document.getElementById('main-view').innerHTML = "<h1>No members found. Add a member first.</h1>";
+            let options = appData.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+            document.getElementById('main-view').innerHTML = `
+                <h1>Record Payment</h1>
+                <div class="glass-card" style="max-width:100%; margin-top:20px;">
+                    <label>Member</label>
+                    <select id="p-mid">${options}</select>
+                    <label>Amount ($)</label>
+                    <input type="number" id="p-amt" placeholder="0.00">
+                    <button class="btn" onclick="savePayment()">Save Transaction</button>
+                </div>
+            `;
+        }
+
+        async function savePayment() {
+            const mId = document.getElementById('p-mid').value;
+            const amt = document.getElementById('p-amt').value;
+            if(!amt) return alert("Enter amount");
+            appData.payments.push({ mId: mId, amount: parseFloat(amt), date: new Date().toLocaleDateString() });
+            await saveData();
+            alert("Payment recorded!");
+            viewMembers();
+        }
+
+        async function deleteEmp(id) {
+            appData.employees = appData.employees.filter(e => e.id !== id);
+            await saveData();
+            viewEmployees();
+        }
+
+        async function deleteMember(id) {
+            appData.members = appData.members.filter(m => m.id !== id);
+            await saveData();
+            viewMembers();
+        }
+
+        function exportPaymentsToCSV() {
+            if (appData.payments.length === 0) return alert("No payment history to export.");
+            
+            const headers = ["Member", "Date", "Amount"];
+            const dataRows = appData.payments.map(p => {
+                const member = appData.members.find(m => m.id == p.mId);
+                return [member ? member.name : 'Unknown', p.date, p.amount];
+            });
+
+            let csvContent = [headers, ...dataRows].map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `iron_core_finances_${new Date().toLocaleDateString()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
