@@ -136,6 +136,15 @@
             transition: opacity 0.5s ease-out;
         }
 
+        #splash-screen img {
+            animation: logoScale 1s ease-out forwards;
+        }
+
+        @keyframes logoScale {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
         .nav-item {
             padding: 12px 16px;
             border-radius: 12px;
@@ -299,41 +308,32 @@
             payments: []
         };
 
-        const BIN_ID = "69d14a8aaaba882197c4e169";
-        const MASTER_KEY = "$2a$10$boob7HiU/Qq/iPITpxeE0.knWZ6rRbVaVVdBwmJlAgmAbrlr2gX1.";
-        const ACCESS_KEY = "$2a$10$VgVAfIMuJJkppxqYEA90A.vGGGWZRRwayaU6aApoiIBkH8n2BSF/q";
+        const BIN_ID = "69d1f9c1856a682189febe13";
+        const API_KEY = "$2a$10$boob7HiU/Qq/iPITpxeE0.knWZ6rRbVaVVdBwmJlAgmAbrlr2gX1.";
 
         let authMode = ""; 
         let currentView = null;
 
         // JSONBIN OPERATIONS
         async function loadData() {
-            try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-                    headers: { "X-Master-Key": MASTER_KEY, "X-Access-Key": ACCESS_KEY }
-                });
-                const json = await res.json();
-                return json.record;
-            } catch (err) {
-                console.error("Load failed:", err);
-                return { employees: [], members: [], payments: [] };
-            }
+            const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                headers: {
+                    "X-Master-Key": API_KEY
+                }
+            });
+            const json = await res.json();
+            return json.record;
         }
 
-        async function saveData() {
-            try {
-                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-Master-Key": MASTER_KEY,
-                        "X-Access-Key": ACCESS_KEY
-                    },
-                    body: JSON.stringify(appData)
-                });
-            } catch (err) {
-                console.error("Save failed:", err);
-            }
+        async function saveData(data) {
+            await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Master-Key": API_KEY
+                },
+                body: JSON.stringify(data)
+            });
         }
 
         // INITIAL LOAD
@@ -368,7 +368,8 @@
 
         // 1. GATEKEEPER
         function checkGate() {
-            if (document.getElementById('sys-key').value === "gym@2025") {
+            const input = document.getElementById('sys-key').value;
+            if (input === appData.config.masterKey) {
                 showScreen('screen-auth-choice');
             } else {
                 alert("Access Denied");
@@ -390,14 +391,14 @@
             const p = document.getElementById('pass-field').value;
 
             if (authMode === 'admin') {
-                if (u === "admin" && p === "admin123") {
+                if (u === appData.config.admin.username && p === appData.config.admin.password) {
                     launchDashboard('admin');
                 } else alert("Invalid Admin Login");
             } else {
                 const emp = appData.employees.find(e => e.user === u && e.pass === p);
                 if (emp) {
                     emp.lastActive = new Date().toLocaleString();
-                    saveData();
+                    saveData(appData);
                     launchDashboard('staff');
                 } else alert("Invalid Staff Login");
             }
@@ -554,7 +555,7 @@
             appData.employees[idx].user = u;
             appData.employees[idx].pass = p;
             viewEmployees();
-            saveData();
+            saveData(appData);
         }
 
         function saveEmp() {
@@ -563,7 +564,7 @@
             if(!u || !p) return alert("Required fields missing");
             appData.employees.push({ id: Date.now(), user: u, pass: p });
             viewEmployees();
-            saveData();
+            saveData(appData);
         }
 
         // Shared back-end logic for members and payments would follow the same pattern...
@@ -593,7 +594,7 @@
                 i.classList.toggle('active', i.innerText === 'Members');
             });
             viewMembers();
-            saveData();
+            saveData(appData);
         }
 
         function viewPayments() {
@@ -632,19 +633,19 @@
             if(!amt) return alert("Enter amount");
             appData.payments.push({ mId: mId, amount: parseFloat(amt), date: new Date().toLocaleDateString() });
             viewMembers();
-            saveData();
+            saveData(appData);
         }
 
         function deleteEmp(id) {
             appData.employees = appData.employees.filter(e => e.id !== id);
             viewEmployees();
-            saveData();
+            saveData(appData);
         }
 
         function deleteMember(id) {
             appData.members = appData.members.filter(m => m.id !== id);
             viewMembers();
-            saveData();
+            saveData(appData);
         }
 
         function exportPaymentsToCSV() {
