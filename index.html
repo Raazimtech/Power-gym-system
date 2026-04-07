@@ -399,7 +399,7 @@
             </div>
             <div id="refresh-btn" class="nav-item" style="color: var(--accent); border: 1px dashed var(--accent); margin-top: 20px; text-align: center;" onclick="refreshData()">↻ Refresh Data</div>
             <div class="nav-item" style="margin-top: 10px; text-align: center; border: 1px solid var(--border);" onclick="backToChoice()">← Switch Portal</div>
-            <div class="nav-item logout-btn" onclick="location.reload()">Exit System</div>
+            <div class="nav-item logout-btn" onclick="exitSystem()">Exit System</div>
         </div>
         <div class="main-content" id="main-view">
         </div>
@@ -409,22 +409,31 @@
     <div id="message-wrap" class="message-wrap" aria-live="polite"></div>
 
     <script>
-        // GLOBAL STATE & CLOUD CONFIG
+        // CLOUD DATA MODEL (JSONBIN)
+        const BIN_ID = "69d51f7aaaba882197d2c186";
+        const API_KEY = "$2a$10$boob7HiU/Qq/iPITpxeE0.knWZ6rRbVaVVdBwmJlAgmAbrlr2gX1.";
+        const SESSION_KEY = "power_gym_session_v1";
+        const DEFAULT_PLANS = [
+            { id: "basic", name: "Basic", price: 30, durationDays: 30 },
+            { id: "premium", name: "Premium", price: 55, durationDays: 30 },
+            { id: "elite", name: "Elite", price: 95, durationDays: 90 }
+        ];
+
         let appData = {
+            plans: [...DEFAULT_PLANS],
             employees: [],
             members: [],
             payments: [],
+            attendance: [],
+            staffAttendance: [],
             config: {
                 masterKey: "1234",
                 admin: {
                     username: "admin",
-                    password: "123"
+                    passHash: ""
                 }
             }
         };
-
-        const BIN_ID = "69d1f9c1856a682189febe13";
-        const API_KEY = "$2a$10$boob7HiU/Qq/iPITpxeE0.knWZ6rRbVaVVdBwmJlAgmAbrlr2gX1.";
 
         let authMode = ""; 
         let currentView = null;
@@ -445,24 +454,130 @@
             }, 3000);
         }
 
-        // JSONBIN OPERATIONS
-        async function loadData() {
+        function todayISO() {
+            return new Date().toISOString().slice(0, 10);
+        }
+
+        function localDayKey(dateLike = new Date()) {
+            return new Date(dateLike).toDateString();
+        }
+
+        function addDays(dateISO, days) {
+            const d = new Date(`${dateISO}T00:00:00`);
+            d.setDate(d.getDate() + Number(days || 0));
+            return d.toISOString().slice(0, 10);
+        }
+
+        function isExpired(expiryDate) {
+            if (!expiryDate) return true;
+            return new Date(`${expiryDate}T23:59:59`).getTime() < Date.now();
+        }
+
+        async function hashString(value) {
+            const data = new TextEncoder().encode(value);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+        }
+
+        function getPlanById(planId) {
+            return appData.plans.find(p => p.id === planId) || appData.plans[0];
+        }
+
+        function setSession(role, userId, username) {
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+                role,
+                userId: userId || null,
+                username
+            }));
+        }
+
+        function getSession() {
             try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-                    headers: {
-                        "X-Master-Key": API_KEY
-                    }
-                });
-                const json = await res.json();
-                return json.record || appData;
-            } catch (err) {
-                console.error("Cloud sync failed, using local defaults:", err);
-                return appData;
+                return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
+            } catch {
+                return null;
             }
         }
 
+        function clearSession() {
+            sessionStorage.removeItem(SESSION_KEY);
+        }
+
+        function refreshMemberStatuses() {
+            appData.members.forEach(m => {
+                m.status = isExpired(m.expiryDate) ? "Expired" : "Active";
+            });
+        }
+
+        // JSONBIN OPERATIONS
+        async function loadData() {
+            try {
+                const endpoints = [
+                    `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`,
+                    `https://api.jsonbin.io/v3/b/${BIN_ID}`
+                ];
+
+                let loaded = false;
+                for (const url of endpoints) {
+                    const res = await fetch(url, {
+                        headers: {
+                            "X-Master-Key": API_KEY,
+                            "X-Bin-Meta": "false"
+                        }
+                    });
+
+                    if (!res.ok) continue;
+
+                    const json = await res.json();
+                    const data = (json && typeof json === "object" && "record" in json) ? json.record : json;
+                    if (data && typeof data === "object") {
+                        appData = data;
+                        loaded = true;
+                        break;
+                    }
+                }
+
+                if (!loaded) throw new Error("Unable to read bin record");
+            } catch (err) {
+                console.error("Cloud sync failed, using defaults:", err);
+            }
+            appData.plans = Array.isArray(appData.plans) && appData.plans.length ? appData.plans : [...DEFAULT_PLANS];
+            appData.attendance = Array.isArray(appData.attendance) ? appData.attendance : [];
+            appData.staffAttendance = Array.isArray(appData.staffAttendance) ? appData.staffAttendance : [];
+            appData.members = Array.isArray(appData.members) ? appData.members : [];
+            appData.employees = Array.isArray(appData.employees) ? appData.employees : [];
+            appData.payments = Array.isArray(appData.payments) ? appData.payments : [];
+            if (!appData.config) appData.config = { masterKey: "1234", admin: { username: "admin", passHash: "" } };
+            if (!appData.config.admin) appData.config.admin = { username: "admin", passHash: "" };
+            if (!appData.config.admin.passHash) {
+                const legacyAdmin = appData.config.admin.password || "123";
+                appData.config.admin.passHash = await hashString(legacyAdmin);
+                delete appData.config.admin.password;
+            }
+            for (const emp of appData.employees) {
+                if (!emp.passHash && emp.pass) {
+                    emp.passHash = await hashString(emp.pass);
+                    delete emp.pass;
+                }
+            }
+            appData.members = appData.members.map(m => {
+                const plan = getPlanById(m.planId || (appData.plans.find(p => p.name === m.plan)?.id));
+                const startDate = m.startDate || todayISO();
+                const expiryDate = m.expiryDate || addDays(startDate, plan.durationDays);
+                return {
+                    ...m,
+                    planId: plan.id,
+                    startDate,
+                    expiryDate,
+                    paymentIds: Array.isArray(m.paymentIds) ? m.paymentIds : []
+                };
+            });
+            refreshMemberStatuses();
+            return appData;
+        }
+
         async function saveData(data) {
-            await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+            const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -470,6 +585,10 @@
                 },
                 body: JSON.stringify(data)
             });
+            if (!res.ok) {
+                const msg = await res.text();
+                console.error("Cloud save failed:", res.status, msg);
+            }
         }
 
         // INITIAL LOAD
@@ -484,6 +603,8 @@
             }, 1000);
 
             appData = await loadData();
+            const session = getSession();
+            if (session) launchDashboard(session.role);
         })();
 
         // ENTER KEY GLOBAL LISTENER
@@ -498,7 +619,7 @@
         });
 
         function showScreen(id) {
-            document.querySelectorAll('body > div').forEach(div => div.classList.add('hidden'));
+            document.querySelectorAll('body > div:not(#message-wrap)').forEach(div => div.classList.add('hidden'));
             document.getElementById(id).classList.remove('hidden');
         }
 
@@ -523,18 +644,29 @@
 
         // 3. LOGIN LOGIC
         async function handleLogin() {
-            const u = document.getElementById('user-field').value;
+            const u = document.getElementById('user-field').value.trim();
             const p = document.getElementById('pass-field').value;
+            const passHash = await hashString(p);
 
             if (authMode === 'admin') {
-                if (u === appData.config.admin.username && p === appData.config.admin.password) {
+                if (u === appData.config.admin.username && passHash === appData.config.admin.passHash) {
+                    setSession('admin', null, u);
                     launchDashboard('admin');
                 } else showMessage("Invalid admin login");
             } else {
-                const emp = appData.employees.find(e => e.user === u && e.pass === p);
+                const emp = appData.employees.find(e => e.user === u && e.passHash === passHash);
                 if (emp) {
                     emp.lastActive = new Date().toLocaleString();
+                    const alreadyLoggedToday = appData.staffAttendance.some(a => a.staffId === emp.id && localDayKey(a.checkedInAt) === localDayKey());
+                    if (!alreadyLoggedToday) {
+                        appData.staffAttendance.push({
+                            id: Date.now() + Math.floor(Math.random() * 1000),
+                            staffId: emp.id,
+                            checkedInAt: new Date().toISOString()
+                        });
+                    }
                     saveData(appData);
+                    setSession('staff', emp.id, emp.user);
                     launchDashboard('staff');
                 } else showMessage("Invalid staff login");
             }
@@ -542,19 +674,26 @@
 
         async function refreshData() {
             const btn = document.getElementById('refresh-btn');
-            btn.innerText = "↻ Syncing...";
-            appData = await loadData();
+            btn.innerText = "Syncing...";
+            await loadData();
             if(currentView) currentView();
-            btn.innerText = "↻ Refresh Data";
+            btn.innerText = "Refresh Data";
         }
 
         function backToChoice() {
+            clearSession();
             document.body.classList.add('auth-center');
             showScreen('screen-auth-choice');
         }
 
+        function exitSystem() {
+            clearSession();
+            location.reload();
+        }
+
         // 4. DASHBOARD RENDERER
         function launchDashboard(role) {
+            if (!getSession()) return;
             document.body.classList.remove('auth-center');
             showScreen('screen-dashboard');
             renderNav(role);
@@ -573,16 +712,20 @@
             nav.innerHTML = role === 'admin' ? `
                 <div class="nav-item" onclick="switchTab(this, viewStats)">Overview</div>
                 <div class="nav-item" onclick="switchTab(this, viewEmployees)">Manage Staff</div>
+                <div class="nav-item" onclick="switchTab(this, viewPlans)">Plans</div>
                 <div class="nav-item" onclick="switchTab(this, viewPayments)">Finances</div>
+                <div class="nav-item" onclick="switchTab(this, viewAttendance)">Attendance</div>
             ` : `
                 <div class="nav-item" onclick="switchTab(this, viewMembers)">Members</div>
                 <div class="nav-item" onclick="switchTab(this, addMemberForm)">Add Member</div>
                 <div class="nav-item" onclick="switchTab(this, addPaymentForm)">Record Payment</div>
+                <div class="nav-item" onclick="switchTab(this, viewAttendance)">Attendance</div>
             `;
             nav.querySelector('.nav-item').classList.add('active');
         }
 
         function switchTab(el, func) {
+            if (!getSession()) return;
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
             el.classList.add('active');
 
@@ -597,13 +740,33 @@
 
         // --- ADMIN VIEWS ---
         function viewStats() {
-            const revenue = appData.payments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+            refreshMemberStatuses();
+            const revenue = appData.payments.filter(p => p.status !== 'unpaid').reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+            const activeMembers = appData.members.filter(m => m.status === 'Active').length;
+            const expiredMembers = appData.members.filter(m => m.status === 'Expired').length;
+            const checkinsToday = appData.attendance.filter(a => localDayKey(a.checkedInAt) === localDayKey()).length;
+            const staffCheckinsToday = appData.staffAttendance.filter(a => localDayKey(a.checkedInAt) === localDayKey()).length;
             document.getElementById('main-view').innerHTML = `
                 <h2>System Overview</h2>
                 <div class="stats-row">
                     <div class="stat-card"><h3>Staff</h3><p>${appData.employees.length}</p></div>
-                    <div class="stat-card"><h3>Total Members</h3><p>${appData.members.length}</p></div>
+                    <div class="stat-card"><h3>Active Members</h3><p>${activeMembers}</p></div>
+                    <div class="stat-card"><h3>Expired Members</h3><p>${expiredMembers}</p></div>
                     <div class="stat-card"><h3>Revenue</h3><p>$${revenue.toFixed(2)}</p></div>
+                    <div class="stat-card"><h3>Check-ins Today</h3><p>${checkinsToday}</p></div>
+                    <div class="stat-card"><h3>Staff Present Today</h3><p>${staffCheckinsToday}</p></div>
+                </div>
+            `;
+        }
+
+        function viewPlans() {
+            const rows = appData.plans.map(p => `
+                <tr><td>${p.name}</td><td>$${Number(p.price).toFixed(2)}</td><td>${p.durationDays} days</td></tr>
+            `).join('');
+            document.getElementById('main-view').innerHTML = `
+                <h2>Membership Plans</h2>
+                <div class="table-wrapper">
+                    <table><thead><tr><th>Plan</th><th>Price</th><th>Duration</th></tr></thead><tbody>${rows}</tbody></table>
                 </div>
             `;
         }
@@ -618,6 +781,7 @@
                     <td>${e.user}</td>
                     <td>${e.lastActive || 'Never'}</td>
                     <td>
+                        <button onclick="checkInStaff(${e.id})" style="background:none; border:none; color:#16a34a; cursor:pointer; margin-right: 10px;">Check-in</button>
                         <button onclick="editEmpForm(${e.id})" style="background:none; border:none; color:var(--accent); cursor:pointer; margin-right: 10px;">Edit</button>
                         <button onclick="deleteEmp(${e.id})" style="background:none; border:none; color:#ef4444; cursor:pointer;">Delete</button>
                     </td>
@@ -635,6 +799,7 @@
 
         // --- STAFF VIEWS ---
         function viewMembers() {
+            refreshMemberStatuses();
             document.getElementById('main-view').innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
                     <h2>Gym Members</h2>
@@ -643,29 +808,37 @@
                 <div class="table-wrapper">
                     <table>
                         <thead>
-                            <tr><th>ID</th><th>Name</th><th>Phone</th><th>Age</th><th>Plan</th><th>Status</th><th></th></tr>
+                            <tr><th>ID</th><th>Name</th><th>Plan</th><th>Start</th><th>Expiry</th><th>Status</th><th>Payment</th><th></th></tr>
                         </thead>
                         <tbody id="member-table-body">
                             ${renderMemberRows(appData.members)}
                         </tbody>
                     </table>
                 </div>`;
+            saveData(appData);
         }
 
         function renderMemberRows(data) {
-            return data.map(m => `
+            return data.map(m => {
+                const plan = getPlanById(m.planId);
+                const latestPay = appData.payments.filter(p => p.memberId == m.id).slice(-1)[0];
+                const payStatus = latestPay ? latestPay.status : 'unpaid';
+                return `
                 <tr>
                     <td>#${m.id}</td>
                     <td>${m.name}</td>
-                    <td>${m.phone || '-'}</td>
-                    <td>${m.age || '-'}</td>
-                    <td>${m.plan}</td>
+                    <td>${plan ? plan.name : '-'}</td>
+                    <td>${m.startDate || '-'}</td>
+                    <td>${m.expiryDate || '-'}</td>
                     <td>${m.status}</td>
+                    <td>${payStatus}</td>
                     <td>
+                        <button onclick="checkInMember(${m.id})" style="background:none; border:none; color:#16a34a; cursor:pointer; margin-right:10px;">Check-in</button>
                         <button onclick="editMemberForm(${m.id})" style="background:none; border:none; color:var(--accent); cursor:pointer; margin-right:10px;">Edit</button>
                         <button onclick="deleteMember(${m.id})" style="background:none; border:none; color:#ef4444; cursor:pointer;">Remove</button>
                     </td>
-                </tr>`).join('');
+                </tr>`;
+            }).join('');
         }
 
         function filterMembers() {
@@ -703,44 +876,48 @@
                     <input type="tel" id="edit-phone" value="${emp.phone || ''}" style="margin-bottom:15px;">
                     <label>Username</label>
                     <input type="text" id="edit-u" value="${emp.user}" style="margin-bottom:15px;">
-                    <label>Password</label>
-                    <input type="password" id="edit-p" value="${emp.pass}" style="margin-bottom:15px;">
+                    <label>New Password (optional)</label>
+                    <input type="password" id="edit-p" placeholder="Leave blank to keep current password" style="margin-bottom:15px;">
                     <button class="btn" onclick="updateEmp(${id})">Save Changes</button>
                     <button class="btn" onclick="viewEmployees()" style="background:none; color:#64748b;">Cancel</button>
                 </div>
             `;
         }
 
-        function updateEmp(id) {
+        async function updateEmp(id) {
             const name = document.getElementById('edit-name').value;
             const role = document.getElementById('edit-role').value;
             const phone = document.getElementById('edit-phone').value;
             const u = document.getElementById('edit-u').value;
             const p = document.getElementById('edit-p').value;
-            if(!name || !role || !phone || !u || !p) return showMessage("Fill all staff fields");
+            if(!name || !role || !phone || !u) return showMessage("Fill all required staff fields");
             const idx = appData.employees.findIndex(e => e.id === id);
             appData.employees[idx].name = name;
             appData.employees[idx].role = role;
             appData.employees[idx].phone = phone;
             appData.employees[idx].user = u;
-            appData.employees[idx].pass = p;
+            if (p) appData.employees[idx].passHash = await hashString(p);
             viewEmployees();
             saveData(appData);
         }
 
-        function saveEmp() {
+        async function saveEmp() {
             const name = document.getElementById('new-name').value;
             const role = document.getElementById('new-role').value;
             const phone = document.getElementById('new-phone').value;
             const u = document.getElementById('new-u').value;
             const p = document.getElementById('new-p').value;
             if(!name || !role || !phone || !u || !p) return showMessage("Required staff fields missing");
-            appData.employees.push({ id: Date.now(), name: name, role: role, phone: phone, user: u, pass: p });
+            appData.employees.push({ id: Date.now(), name: name, role: role, phone: phone, user: u, passHash: await hashString(p) });
             viewEmployees();
             saveData(appData);
         }
 
         // Shared back-end logic for members and payments would follow the same pattern...
+        function renderPlanOptions(selected) {
+            return appData.plans.map(p => `<option value="${p.id}" ${p.id === selected ? 'selected' : ''}>${p.name} - $${p.price} / ${p.durationDays} days</option>`).join('');
+        }
+
         function addMemberForm() {
             // Sync navigation active state for staff view
             document.querySelectorAll('.nav-item').forEach(i => {
@@ -753,7 +930,10 @@
                     <input type="text" id="m-n" placeholder="Full Name" style="margin-bottom:15px;">
                     <input type="tel" id="m-ph" placeholder="Phone Number" style="margin-bottom:15px;">
                     <input type="number" id="m-age" placeholder="Age" min="10" max="100" style="margin-bottom:15px;">
-                    <input type="text" id="m-pl" placeholder="Plan (e.g. Pro, Basic)" style="margin-bottom:15px;">
+                    <label>Plan</label>
+                    <select id="m-plan" style="margin-bottom:15px;">${renderPlanOptions(appData.plans[0]?.id)}</select>
+                    <label>Start Date</label>
+                    <input type="date" id="m-start" value="${todayISO()}" style="margin-bottom:15px;">
                     <button class="btn" onclick="saveMember()">Add to System</button>
                 </div>
             `;
@@ -763,9 +943,22 @@
             const n = document.getElementById('m-n').value;
             const ph = document.getElementById('m-ph').value;
             const age = document.getElementById('m-age').value;
-            const p = document.getElementById('m-pl').value;
-            if(!n || !ph || !age || !p) return showMessage("Fill all member fields");
-            appData.members.push({ id: Date.now(), name: n, phone: ph, age: age, plan: p, status: 'Active' });
+            const planId = document.getElementById('m-plan').value;
+            const startDate = document.getElementById('m-start').value || todayISO();
+            if(!n || !ph || !age || !planId) return showMessage("Fill all member fields");
+            const plan = getPlanById(planId);
+            const expiryDate = addDays(startDate, plan.durationDays);
+            appData.members.push({
+                id: Date.now(),
+                name: n,
+                phone: ph,
+                age: age,
+                planId: planId,
+                startDate: startDate,
+                expiryDate: expiryDate,
+                status: isExpired(expiryDate) ? 'Expired' : 'Active',
+                paymentIds: []
+            });
             // Return to member list and sync navigation active state
             document.querySelectorAll('.nav-item').forEach(i => {
                 i.classList.toggle('active', i.innerText === 'Members');
@@ -792,12 +985,11 @@
                     <label>Age</label>
                     <input type="number" id="edit-m-age" value="${member.age || ''}" min="10" max="100" style="margin-bottom:15px;">
                     <label>Plan</label>
-                    <input type="text" id="edit-m-pl" value="${member.plan || ''}" style="margin-bottom:15px;">
+                    <select id="edit-m-plan" style="margin-bottom:15px;">${renderPlanOptions(member.planId)}</select>
+                    <label>Start Date</label>
+                    <input type="date" id="edit-m-start" value="${member.startDate || todayISO()}" style="margin-bottom:15px;">
                     <label>Status</label>
-                    <select id="edit-m-st">
-                        <option value="Active" ${member.status === 'Active' ? 'selected' : ''}>Active</option>
-                        <option value="Inactive" ${member.status === 'Inactive' ? 'selected' : ''}>Inactive</option>
-                    </select>
+                    <input type="text" id="edit-m-st" value="${member.status}" disabled style="margin-bottom:15px;">
                     <button class="btn" onclick="updateMember(${id})">Save Changes</button>
                     <button class="btn" onclick="viewMembers()" style="background:none; color:#64748b;">Cancel</button>
                 </div>
@@ -808,27 +1000,146 @@
             const n = document.getElementById('edit-m-n').value;
             const ph = document.getElementById('edit-m-ph').value;
             const age = document.getElementById('edit-m-age').value;
-            const p = document.getElementById('edit-m-pl').value;
-            const st = document.getElementById('edit-m-st').value;
-            if(!n || !ph || !age || !p) return showMessage("Fill all member fields");
+            const planId = document.getElementById('edit-m-plan').value;
+            const startDate = document.getElementById('edit-m-start').value || todayISO();
+            if(!n || !ph || !age || !planId) return showMessage("Fill all member fields");
 
             const idx = appData.members.findIndex(m => m.id === id);
             if (idx === -1) return showMessage("Member not found");
+            const plan = getPlanById(planId);
+            const expiryDate = addDays(startDate, plan.durationDays);
 
             appData.members[idx].name = n;
             appData.members[idx].phone = ph;
             appData.members[idx].age = age;
-            appData.members[idx].plan = p;
-            appData.members[idx].status = st;
+            appData.members[idx].planId = planId;
+            appData.members[idx].startDate = startDate;
+            appData.members[idx].expiryDate = expiryDate;
+            appData.members[idx].status = isExpired(expiryDate) ? 'Expired' : 'Active';
             viewMembers();
             saveData(appData);
             showMessage("Member updated", "success");
         }
 
+        function checkInMember(id) {
+            const session = getSession();
+            if (!session) return showMessage("Login required");
+            const member = appData.members.find(m => m.id === id);
+            if (!member) return showMessage("Member not found");
+            refreshMemberStatuses();
+            if (member.status === 'Expired') return showMessage("Cannot check in expired member");
+            const alreadyCheckedToday = appData.attendance.some(a => a.memberId === id && localDayKey(a.checkedInAt) === localDayKey());
+            if (alreadyCheckedToday) return showMessage("Member already checked in today", "info");
+            appData.attendance.push({
+                id: Date.now(),
+                memberId: id,
+                checkedInAt: new Date().toISOString(),
+                checkedBy: session.username
+            });
+            saveData(appData);
+            showMessage(`${member.name} checked in`, "success");
+        }
+
+        function viewAttendance() {
+            const session = getSession();
+            const isAdmin = session && session.role === 'admin';
+            const memberRows = [...appData.attendance].reverse().map(a => {
+                const member = appData.members.find(m => m.id === a.memberId);
+                return `<tr><td>${member ? member.name : 'Unknown'}</td><td>${new Date(a.checkedInAt).toLocaleString()}</td><td>${a.checkedBy || '-'}</td><td>${isAdmin ? `<button onclick="removeMemberAttendance(${a.id})" style="background:none; border:none; color:#ef4444; cursor:pointer;">Remove</button>` : '-'}</td></tr>`;
+            }).join('');
+            const staffRows = [...appData.staffAttendance].reverse().map(a => {
+                const staff = appData.employees.find(e => e.id === a.staffId);
+                return `<tr><td>${staff ? staff.name || staff.user : 'Unknown'}</td><td>${staff ? staff.role || '-' : '-'}</td><td>${new Date(a.checkedInAt).toLocaleString()}</td><td>${isAdmin ? `<button onclick="removeStaffAttendance(${a.id})" style="background:none; border:none; color:#ef4444; cursor:pointer;">Remove</button>` : '-'}</td></tr>`;
+            }).join('');
+            document.getElementById('main-view').innerHTML = `
+                <h2>Attendance Log</h2>
+                ${isAdmin ? `<div style="display:flex; justify-content:flex-end; margin-bottom:12px;"><button class="btn" style="width:auto; padding:10px 16px;" onclick="removeExtraAttendance()">Remove Extra Attendance</button></div>` : ''}
+                <div class="table-wrapper">
+                    <h3 style="margin-bottom:10px;">Member Attendance</h3>
+                    <table style="margin-bottom:20px;"><thead><tr><th>Member</th><th>Check-in Time</th><th>Checked By</th><th>Action</th></tr></thead><tbody>${memberRows || "<tr><td colspan='4'>No member attendance records yet.</td></tr>"}</tbody></table>
+                    <h3 style="margin-bottom:10px;">Staff Attendance</h3>
+                    <table><thead><tr><th>Staff</th><th>Role</th><th>Sign-in Time</th><th>Action</th></tr></thead><tbody>${staffRows || "<tr><td colspan='4'>No staff attendance records yet.</td></tr>"}</tbody></table>
+                </div>
+            `;
+        }
+
+        function removeMemberAttendance(attendanceId) {
+            const session = getSession();
+            if (!session || session.role !== 'admin') return showMessage("Only admin can remove attendance");
+            appData.attendance = appData.attendance.filter(a => a.id !== attendanceId);
+            saveData(appData);
+            viewAttendance();
+            showMessage("Member attendance removed", "success");
+        }
+
+        function removeStaffAttendance(attendanceId) {
+            const session = getSession();
+            if (!session || session.role !== 'admin') return showMessage("Only admin can remove attendance");
+            appData.staffAttendance = appData.staffAttendance.filter(a => a.id !== attendanceId);
+            saveData(appData);
+            viewAttendance();
+            showMessage("Staff attendance removed", "success");
+        }
+
+        function removeExtraAttendance() {
+            const session = getSession();
+            if (!session || session.role !== 'admin') return showMessage("Only admin can remove extra attendance");
+
+            const keepMember = new Set();
+            const uniqueMember = [];
+            [...appData.attendance]
+                .sort((a, b) => new Date(a.checkedInAt) - new Date(b.checkedInAt))
+                .forEach(a => {
+                    const key = `${a.memberId}|${localDayKey(a.checkedInAt)}`;
+                    if (!keepMember.has(key)) {
+                        keepMember.add(key);
+                        uniqueMember.push(a);
+                    }
+                });
+
+            const keepStaff = new Set();
+            const uniqueStaff = [];
+            [...appData.staffAttendance]
+                .sort((a, b) => new Date(a.checkedInAt) - new Date(b.checkedInAt))
+                .forEach(a => {
+                    const key = `${a.staffId}|${localDayKey(a.checkedInAt)}`;
+                    if (!keepStaff.has(key)) {
+                        keepStaff.add(key);
+                        uniqueStaff.push(a);
+                    }
+                });
+
+            const removedCount = (appData.attendance.length - uniqueMember.length) + (appData.staffAttendance.length - uniqueStaff.length);
+            appData.attendance = uniqueMember;
+            appData.staffAttendance = uniqueStaff;
+            saveData(appData);
+            viewAttendance();
+            showMessage(removedCount > 0 ? `${removedCount} extra attendance record(s) removed` : "No extra attendance found", "info");
+        }
+
+        function checkInStaff(staffId) {
+            const session = getSession();
+            if (!session || session.role !== 'admin') return showMessage("Only admin can check in staff");
+            const staff = appData.employees.find(e => e.id === staffId);
+            if (!staff) return showMessage("Staff not found");
+
+            const alreadyCheckedToday = appData.staffAttendance.some(a => a.staffId === staffId && localDayKey(a.checkedInAt) === localDayKey());
+            if (alreadyCheckedToday) return showMessage("Staff already checked in today", "info");
+
+            appData.staffAttendance.push({
+                id: Date.now(),
+                staffId: staffId,
+                checkedInAt: new Date().toISOString()
+            });
+            saveData(appData);
+            showMessage(`${staff.name || staff.user} checked in`, "success");
+        }
+
         function viewPayments() {
             let rows = appData.payments.map(p => {
-                const member = appData.members.find(m => m.id == p.mId);
-                return `<tr><td>${member ? member.name : 'Unknown'}</td><td>${p.date}</td><td>$${p.amount}</td></tr>`;
+                const member = appData.members.find(m => m.id == p.memberId);
+                const plan = getPlanById(p.planId);
+                return `<tr><td>${member ? member.name : 'Unknown'}</td><td>${plan ? plan.name : '-'}</td><td>${p.periodStart || '-'} to ${p.periodEnd || '-'}</td><td>$${p.amount}</td><td>${p.status || 'paid'}</td><td>${p.date}</td></tr>`;
             }).join('');
             document.getElementById('main-view').innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
@@ -836,7 +1147,7 @@
                     <button class="btn" onclick="exportPaymentsToCSV()" style="width:auto; padding: 10px 20px;">Export CSV</button>
                 </div>
                 <div class="table-wrapper">
-                    <table><thead><tr><th>Member</th><th>Date</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table>
+                    <table><thead><tr><th>Member</th><th>Plan</th><th>Period</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead><tbody>${rows}</tbody></table>
                 </div>`;
         }
 
@@ -847,31 +1158,82 @@
                 <h2>Record Payment</h2>
                 <div class="glass-card" style="max-width:100%; margin-top:20px;">
                     <label>Member</label>
-                    <select id="p-mid">${options}</select>
+                    <select id="p-mid" onchange="fillPaymentDetails()">${options}</select>
+                    <label>Plan</label>
+                    <input type="text" id="p-plan" disabled style="margin-bottom:15px;">
+                    <label>Membership Period</label>
+                    <input type="text" id="p-period" disabled style="margin-bottom:15px;">
                     <label>Amount ($)</label>
-                    <input type="number" id="p-amt" placeholder="0.00">
+                    <input type="number" id="p-amt" placeholder="0.00" style="margin-bottom:15px;">
+                    <label>Payment Status</label>
+                    <select id="p-status">
+                        <option value="paid">Paid</option>
+                        <option value="unpaid">Unpaid</option>
+                    </select>
                     <button class="btn" onclick="savePayment()">Save Transaction</button>
                 </div>
             `;
+            fillPaymentDetails();
+        }
+
+        function fillPaymentDetails() {
+            const mId = Number(document.getElementById('p-mid')?.value || 0);
+            const member = appData.members.find(m => m.id === mId);
+            if (!member) return;
+            const plan = getPlanById(member.planId);
+            const planBox = document.getElementById('p-plan');
+            const periodBox = document.getElementById('p-period');
+            const amountBox = document.getElementById('p-amt');
+            if (planBox) planBox.value = `${plan.name} (${plan.durationDays} days)`;
+            if (periodBox) periodBox.value = `${member.startDate} to ${member.expiryDate}`;
+            if (amountBox && !amountBox.value) amountBox.value = Number(plan.price).toFixed(2);
         }
 
         function savePayment() {
-            const mId = document.getElementById('p-mid').value;
-            const amt = document.getElementById('p-amt').value;
-            if(!amt) return showMessage("Enter amount");
-            appData.payments.push({ mId: mId, amount: parseFloat(amt), date: new Date().toLocaleDateString() });
+            const mId = Number(document.getElementById('p-mid').value);
+            const amt = Number(document.getElementById('p-amt').value);
+            const status = document.getElementById('p-status').value;
+            if(!amt || !mId) return showMessage("Enter amount");
+            const member = appData.members.find(m => m.id === mId);
+            if (!member) return showMessage("Member not found");
+            const plan = getPlanById(member.planId);
+            let periodStart = member.startDate;
+            let periodEnd = member.expiryDate;
+            if (status === 'paid') {
+                periodStart = isExpired(member.expiryDate) ? todayISO() : addDays(member.expiryDate, 1);
+                periodEnd = addDays(periodStart, plan.durationDays);
+                member.startDate = periodStart;
+                member.expiryDate = periodEnd;
+                member.status = 'Active';
+            }
+            const paymentId = Date.now();
+            appData.payments.push({
+                id: paymentId,
+                memberId: mId,
+                planId: member.planId,
+                periodStart: periodStart,
+                periodEnd: periodEnd,
+                amount: parseFloat(amt),
+                status: status,
+                date: new Date().toLocaleDateString()
+            });
+            member.paymentIds = Array.isArray(member.paymentIds) ? member.paymentIds : [];
+            member.paymentIds.push(paymentId);
             viewMembers();
             saveData(appData);
         }
 
         function deleteEmp(id) {
             appData.employees = appData.employees.filter(e => e.id !== id);
+            appData.staffAttendance = appData.staffAttendance.filter(a => a.staffId !== id);
             viewEmployees();
             saveData(appData);
         }
 
         function deleteMember(id) {
             appData.members = appData.members.filter(m => m.id !== id);
+            appData.payments = appData.payments.filter(p => p.memberId !== id);
+            appData.attendance = appData.attendance.filter(a => a.memberId !== id);
             viewMembers();
             saveData(appData);
         }
@@ -879,10 +1241,11 @@
         function exportPaymentsToCSV() {
             if (appData.payments.length === 0) return showMessage("No payment history to export.", "info");
             
-            const headers = ["Member", "Date", "Amount"];
+            const headers = ["Member", "Plan", "PeriodStart", "PeriodEnd", "Amount", "Status", "Date"];
             const dataRows = appData.payments.map(p => {
-                const member = appData.members.find(m => m.id == p.mId);
-                return [member ? member.name : 'Unknown', p.date, p.amount];
+                const member = appData.members.find(m => m.id == p.memberId);
+                const plan = getPlanById(p.planId);
+                return [member ? member.name : 'Unknown', plan ? plan.name : '', p.periodStart, p.periodEnd, p.amount, p.status, p.date];
             });
 
             let csvContent = [headers, ...dataRows].map(e => e.join(",")).join("\n");
@@ -899,3 +1262,4 @@
     </script>
 </body>
 </html>
+
