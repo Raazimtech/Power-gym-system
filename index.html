@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Power Gym System | Professional Gym Management System & Affordable Fitness Software</title>
     <meta name="description" content="Power Gym System is a high-performance gym management system and affordable fitness software. Streamline memberships, staff tracking, and financial reporting.">
+    <link rel="icon" type="image/png" sizes="512x512" href="favicon.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="favicon.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -33,7 +35,7 @@
             content: "";
             position: fixed;
             inset: 0;
-            background-image: url('background2.jpg');
+            background-image: url('background.jpg');
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
@@ -241,6 +243,71 @@
         }
         .fab:hover { transform: scale(1.1) rotate(90deg); }
 
+        /* Developer Support Widget */
+        .support-btn {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #0f172a;
+            color: white;
+            border: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: 0.3s;
+        }
+        .support-btn:hover { transform: scale(1.1); background: var(--accent); }
+        .support-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ef4444;
+            color: white;
+            font-size: 11px;
+            font-weight: 800;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #support-chat-window {
+            position: fixed;
+            bottom: 95px;
+            left: 24px;
+            width: min(350px, 90vw);
+            height: 480px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 45px rgba(0,0,0,0.25);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 1001;
+            border: 1px solid var(--border);
+            animation: fadeIn 0.3s ease;
+        }
+        .support-header { background: #0f172a; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 0.95rem; }
+        #support-msgs { flex: 1; padding: 15px; overflow-y: auto; background: #f1f5f9; display: flex; flex-direction: column; gap: 12px; }
+        .support-input-area { padding: 15px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: white; }
+        .support-input-area input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border); outline: none; font-size: 0.9rem; color: var(--text); }
+        .support-send { background: var(--accent); color: white; border: none; padding: 0 18px; border-radius: 10px; cursor: pointer; font-weight: 700; transition: 0.2s; }
+        .support-send:hover { background: var(--accent-hover); }
+        .msg-bubble-support { padding: 10px 14px; border-radius: 16px; font-size: 0.85rem; line-height: 1.4; max-width: 85%; position: relative; }
+        .msg-bubble-support.customer { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 2px; }
+        .msg-bubble-support.support { align-self: flex-start; background: white; color: var(--text); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+        .msg-time-support { font-size: 0.65rem; opacity: 0.6; margin-top: 4px; display: block; text-align: right; }
+
         /* Custom message card (replaces browser alerts) */
         .message-wrap {
             position: fixed;
@@ -316,7 +383,7 @@
 
             .nav-item { margin-bottom: 0; white-space: nowrap; font-size: 0.85rem; }
 
-            .stats-row { grid-template-columns: 1fr; }
+            .stats-row { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 
             .main-content {
                 padding: 20px;
@@ -406,6 +473,20 @@
         <button class="fab" onclick="addMemberForm()" title="Add Member">+</button>
     </div>
 
+    <button class="support-btn" onclick="toggleSupportChat()" title="Contact Developer">💬<span id="support-badge" class="support-badge">1</span></button>
+
+    <div id="support-chat-window">
+        <div class="support-header">
+            <span>Developer Support</span>
+            <button onclick="toggleSupportChat()" style="background:none; border:none; color:white; cursor:pointer; font-size:1.2rem;">×</button>
+        </div>
+        <div id="support-msgs"></div>
+        <div class="support-input-area">
+            <input type="text" id="support-input" placeholder="How can we help?" onkeypress="if(event.key==='Enter') sendSupportChat()">
+            <button class="support-send" onclick="sendSupportChat()">Send</button>
+        </div>
+    </div>
+
     <div id="message-wrap" class="message-wrap" aria-live="polite"></div>
 
     <script>
@@ -418,6 +499,13 @@
             { id: "premium", name: "Premium", price: 55, durationDays: 30 },
             { id: "elite", name: "Elite", price: 95, durationDays: 90 }
         ];
+
+        // Developer Support Configuration
+        const SUPPORT_BIN_ID = '69d76cd7856a68218914733e';
+        const SUPPORT_API_KEY = '$2a$10$boob7HiU/Qq/iPITpxeE0.knWZ6rRbVaVVdBwmJlAgmAbrlr2gX1.';
+        const SYSTEM_IDENTIFIER = "Power Gym System"; // Identifier for this system
+        let supportData = { chats: {} };
+        let lastKnownMsgTime = localStorage.getItem('support_last_time') || '';
 
         let appData = {
             plans: [...DEFAULT_PLANS],
@@ -605,6 +693,7 @@
             appData = await loadData();
             const session = getSession();
             if (session) launchDashboard(session.role);
+            setInterval(syncSupport, 5000); // Background poll for support notifications
         })();
 
         // ENTER KEY GLOBAL LISTENER
@@ -619,7 +708,7 @@
         });
 
         function showScreen(id) {
-            document.querySelectorAll('body > div:not(#message-wrap)').forEach(div => div.classList.add('hidden'));
+            document.querySelectorAll('body > div:not(#message-wrap):not(#support-chat-window)').forEach(div => div.classList.add('hidden'));
             document.getElementById(id).classList.remove('hidden');
         }
 
@@ -1259,7 +1348,123 @@
             link.click();
             document.body.removeChild(link);
         }
+
+        // --- Support Chat Functionality ---
+        function toggleSupportChat() {
+            const win = document.getElementById('support-chat-window');
+            const isOpening = win.style.display === 'none' || win.style.display === '';
+            win.style.display = isOpening ? 'flex' : 'none';
+            
+            if (isOpening) {
+                document.getElementById('support-badge').style.display = 'none';
+                const uid = getSupportUID();
+                if (supportData.chats && supportData.chats[uid] && supportData.chats[uid].messages.length > 0) {
+                    lastKnownMsgTime = supportData.chats[uid].messages.slice(-1)[0].time;
+                    localStorage.setItem('support_last_time', lastKnownMsgTime);
+                }
+                syncSupport();
+            }
+        }
+
+        function getSupportUID() {
+            const session = getSession();
+            if (session && session.username) return session.username;
+            let uid = localStorage.getItem('support_uid');
+            if (!uid) {
+                uid = 'Guest-' + Math.random().toString(36).substr(2, 5).toUpperCase();
+                localStorage.setItem('support_uid', uid);
+            }
+            return uid;
+        }
+
+        async function syncSupport() {
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${SUPPORT_BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': SUPPORT_API_KEY, "X-Bin-Meta": "false" }
+                });
+                if (!res.ok) return;
+                const record = await res.json();
+                supportData = (record && record.chats) ? record : { chats: {} };
+                
+                const uid = getSupportUID();
+                const win = document.getElementById('support-chat-window');
+                const chat = supportData.chats ? supportData.chats[uid] : null;
+                
+                if (chat && chat.messages.length > 0 && win.style.display !== 'flex') {
+                    const lastMsg = chat.messages[chat.messages.length - 1];
+                    if (lastMsg.sender === 'support' && lastMsg.time !== lastKnownMsgTime) {
+                        document.getElementById('support-badge').style.display = 'flex';
+                    }
+                }
+                renderSupport();
+            } catch (e) { console.error("Support sync error"); }
+        }
+
+        function renderSupport() {
+            const uid = getSupportUID();
+            const container = document.getElementById('support-msgs');
+            const chat = supportData.chats ? supportData.chats[uid] : null;
+            
+            if (chat && chat.messages.length > 0 && document.getElementById('support-chat-window').style.display === 'flex') {
+                lastKnownMsgTime = chat.messages[chat.messages.length - 1].time;
+                localStorage.setItem('support_last_time', lastKnownMsgTime);
+            }
+            
+            if (!chat || !chat.messages.length) {
+                container.innerHTML = `<div style="text-align:center; color:#64748b; font-size:0.8rem; margin-top:40px; padding:0 20px;">Welcome! Your ID is <b>${uid}</b>. Message the developer for assistance.</div>`;
+                return;
+            }
+
+            container.innerHTML = chat.messages.map(m => `
+                <div class="msg-bubble-support ${m.sender}">
+                    ${m.text}
+                    <span class="msg-time-support">${new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                </div>
+            `).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendSupportChat() {
+            const input = document.getElementById('support-input');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            const uid = getSupportUID();
+
+            // Mandatory fetch of latest data before sending to prevent session loss on reload or concurrent writes
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${SUPPORT_BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': SUPPORT_API_KEY, "X-Bin-Meta": "false" }
+                });
+                if (res.ok) {
+                    const latest = await res.json();
+                    if (latest && latest.chats) {
+                        supportData = latest;
+                    }
+                }
+            } catch (e) { console.warn("Pre-send sync failed"); }
+
+            if (!supportData.chats) supportData.chats = {};
+            if (!supportData.chats[uid]) {
+                supportData.chats[uid] = {
+                    source: SYSTEM_IDENTIFIER, // Add source identifier for new chats
+                    messages: []
+                };
+            } else if (!supportData.chats[uid].source) {
+                // If chat exists but source is missing (e.g., old chat or first message after update)
+                supportData.chats[uid].source = SYSTEM_IDENTIFIER;
+            }
+            
+            supportData.chats[uid].messages.push({ sender: 'customer', text: text, time: new Date().toISOString() });
+            input.value = '';
+            renderSupport();
+            
+            await fetch(`https://api.jsonbin.io/v3/b/${SUPPORT_BIN_ID}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "X-Master-Key": SUPPORT_API_KEY },
+                body: JSON.stringify(supportData)
+            });
+        }
     </script>
 </body>
 </html>
-
