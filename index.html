@@ -7,6 +7,12 @@
     <meta name="description" content="Power Gym System is a high-performance gym management system and affordable fitness software. Streamline memberships, staff tracking, and financial reporting.">
     <link rel="icon" type="image/png" sizes="512x512" href="fade out.png">
     <link rel="apple-touch-icon" sizes="512x512" href="fade out.png">
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Power Gym">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -505,6 +511,7 @@
             <div id="nav-links">
             </div>
             <div id="refresh-btn" class="nav-item" style="color: var(--accent); border: 1px dashed var(--accent); margin-top: 20px; text-align: center;" onclick="refreshData()">↻ Refresh Data</div>
+            <div id="install-app-btn" class="nav-item hidden" style="color: var(--accent); border: 1px solid var(--border); margin-top: 10px; text-align: center;" onclick="promptInstall()">⬇ Install App</div>
             <div class="nav-item" style="margin-top: 10px; text-align: center; border: 1px solid var(--border);" onclick="backToChoice()">← Switch Portal</div>
             <div class="nav-item logout-btn" onclick="exitSystem()">Exit System</div>
         </div>
@@ -1634,7 +1641,68 @@
                 }
             } catch (e) { console.error("Clear chat error"); }
         }
+
+        // PWA (Install as App) - desktop-first, mobile supported
+        let deferredInstallPrompt = null;
+
+        function isRunningStandalone() {
+            return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        }
+
+        function showInstallEntry(show) {
+            const el = document.getElementById('install-app-btn');
+            if (!el) return;
+            if (show) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+
+        function promptInstall() {
+            if (deferredInstallPrompt) {
+                deferredInstallPrompt.prompt();
+                deferredInstallPrompt.userChoice.then((choice) => {
+                    if (choice && choice.outcome === 'accepted') {
+                        showInstallEntry(false);
+                        showMessage("Install started", "success");
+                    }
+                    deferredInstallPrompt = null;
+                });
+                return;
+            }
+
+            const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+            if (isIOS) {
+                showMessage("On iPhone/iPad: Share → Add to Home Screen", "info");
+                return;
+            }
+
+            showMessage("Install isn't available yet. Use Chrome/Edge and make sure this site is served over HTTPS or localhost.", "info");
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            if (!isRunningStandalone()) showInstallEntry(true);
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredInstallPrompt = null;
+            showInstallEntry(false);
+            showMessage("App installed", "success");
+        });
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js').catch((err) => console.warn('Service worker registration failed', err));
+
+                if (isRunningStandalone()) {
+                    showInstallEntry(false);
+                    return;
+                }
+
+                const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+                if (isIOS) showInstallEntry(true);
+            });
+        }
     </script>
 </body>
 </html>
-
