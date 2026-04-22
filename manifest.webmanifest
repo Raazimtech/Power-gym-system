@@ -2,7 +2,7 @@
   "name": "Power Gym System",
   "short_name": "Power Gym",
   "description": "Professional gym management system",
-  "start_url": "./web.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
