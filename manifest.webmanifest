@@ -2,7 +2,7 @@
   "name": "Power Gym System",
   "short_name": "Power Gym",
   "description": "Professional gym management system",
-  "start_url": "./index.html",
+  "start_url": "./web.html",
   "scope": "./",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
@@ -10,11 +10,16 @@
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "fade%20out.png",
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }
-
