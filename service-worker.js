@@ -1,6 +1,11 @@
 /* Power Gym PWA service worker (minimal) */
-const CACHE_NAME = "power-gym-pwa-v1";
-const PRECACHE_URLS = ["./index.html", "./manifest.webmanifest", "./fade out.png", "./logo.png"];
+const CACHE_NAME = "power-gym-pwa-v2";
+const PRECACHE_URLS = [
+  "./web.html",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./icon-180.png"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -27,11 +32,16 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  // Always prefer the latest manifest/service worker from the network.
+  if (url.pathname.endsWith("/manifest.webmanifest") || url.pathname.endsWith("/service-worker.js")) {
+    event.respondWith(fetch(req).catch(() => caches.match(req)));
+    return;
+  }
+
   if (req.mode === "navigate") {
-    event.respondWith(caches.match("./index.html").then((cached) => cached || fetch(req)));
+    event.respondWith(caches.match("./web.html").then((cached) => cached || fetch(req)));
     return;
   }
 
   event.respondWith(caches.match(req).then((cached) => cached || fetch(req)));
 });
-
